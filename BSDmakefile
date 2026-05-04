@@ -8,6 +8,15 @@ CC      ?= cc
 CXXFLAGS ?= -O2 -g -Wall -Wextra
 CFLAGS   ?= -O2 -g -Wall -Wextra
 
+PREFIX       ?= /usr/local
+DESTDIR      ?=
+INCLUDEDIR   ?= ${PREFIX}/include
+LIBDIR       ?= ${PREFIX}/lib
+PKGCONFIGDIR ?= ${PREFIX}/libdata/pkgconfig
+INSTALL      ?= install
+
+VERSION = 0.1.0
+
 CXXSTD    = -std=c++17
 INCLUDES  = -Iinclude -Ithird_party/blake3
 BLAKE3_DEFS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 \
@@ -22,7 +31,7 @@ BLAKE3_OBJS = ${BUILD}/blake3/blake3.o \
 TESTS = test_basic test_empty test_errors test_allocator
 TEST_BINS = ${TESTS:S,^,${BUILD}/,}
 
-.PHONY: all test clean
+.PHONY: all test clean install uninstall
 
 all: ${TEST_BINS}
 
@@ -51,3 +60,23 @@ ${BUILD}/${t}: tests/${t}.cpp ${BLAKE3_OBJS} include/dir_hash.hpp tests/test_hel
 
 clean:
 	rm -rf ${BUILD}
+
+install:
+	${INSTALL} -d ${DESTDIR}${INCLUDEDIR}
+	${INSTALL} -m 644 include/dir_hash.hpp ${DESTDIR}${INCLUDEDIR}/dir_hash.hpp
+	${INSTALL} -d ${DESTDIR}${PKGCONFIGDIR}
+	@printf '%s\n' \
+	    'prefix=${PREFIX}' \
+	    'exec_prefix=$${prefix}' \
+	    'includedir=$${prefix}/include' \
+	    '' \
+	    'Name: dir_hash' \
+	    'Description: Content-based directory tree hashing with BLAKE3' \
+	    'Version: ${VERSION}' \
+	    'Requires: libblake3' \
+	    'Cflags: -I$${includedir}' \
+	    > ${DESTDIR}${PKGCONFIGDIR}/dir_hash.pc
+
+uninstall:
+	rm -f ${DESTDIR}${INCLUDEDIR}/dir_hash.hpp
+	rm -f ${DESTDIR}${PKGCONFIGDIR}/dir_hash.pc
