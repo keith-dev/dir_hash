@@ -59,8 +59,12 @@ inline bool hash_file(const char* accpath, std::string_view report_path,
             blake3_hasher_update(&h, buffer, static_cast<std::size_t>(n));
             continue;
         }
-        if (n == 0) break;
-        if (errno == EINTR) continue;
+        if (n == 0) {
+            break;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
         on_error(report_path, make_ec(errno));
         ok = false;
         break;
@@ -69,7 +73,9 @@ inline bool hash_file(const char* accpath, std::string_view report_path,
     ::posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
     ::close(fd);
 
-    if (ok) blake3_hasher_finalize(&h, out.data(), out.size());
+    if (ok) {
+        blake3_hasher_finalize(&h, out.data(), out.size());
+    }
     return ok;
 }
 
@@ -147,7 +153,9 @@ std::array<std::uint8_t, 32> hash_directory(
             if (detail::hash_file(ent->fts_accpath, ent_path, fh, on_error,
                                   buf.data(), buf.size())) {
                 callback(ent_path, fh, false);
-                if (!stack.empty()) stack.back().push_back(fh);
+                if (!stack.empty()) {
+                    stack.back().push_back(fh);
+                }
             }
             break;
         }

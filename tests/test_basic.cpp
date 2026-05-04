@@ -45,7 +45,11 @@ int main() {
     Hash got_root = dir_hash::hash_directory(
         root,
         [&](std::string_view, const Hash&, bool is_dir) {
-            if (is_dir) ++dir_callbacks; else ++file_callbacks;
+            if (is_dir) {
+                ++dir_callbacks;
+            } else {
+                ++file_callbacks;
+            }
         });
 
     REQUIRE(file_callbacks == 3);

@@ -31,7 +31,9 @@ int main() {
     Hash got = dir_hash::hash_directory(
         root,
         [&](std::string_view, const Hash&, bool is_dir) {
-            if (!is_dir) ++file_cbs;
+            if (!is_dir) {
+                ++file_cbs;
+            }
         },
         [&](std::string_view p, std::error_code) {
             ++errors;
