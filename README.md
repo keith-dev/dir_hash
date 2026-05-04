@@ -8,6 +8,8 @@ and directories alike. Name-agnostic: only content matters.
 Intended for comparing large directory trees (e.g. backup snapshots) to
 identify which subtrees have changed.
 
+Includes a small `md5sum`/`md5(1)`-style command-line frontend, `dirhash`.
+
 See [`Plan.md`](Plan.md) for the full design specification.
 
 ---
@@ -51,10 +53,16 @@ Targets:
 |----------------|-------------------------------|------------------------------------|
 | `PREFIX`       | `/usr/local`                  | `/usr/local`                       |
 | `DESTDIR`      | (empty — staging prefix)      | (empty)                            |
+| `BINDIR`       | `$(PREFIX)/bin`               | `${PREFIX}/bin`                    |
 | `INCLUDEDIR`   | `$(PREFIX)/include`           | `${PREFIX}/include`                |
 | `LIBDIR`       | `$(PREFIX)/lib`               | `${PREFIX}/lib`                    |
 | `PKGCONFIGDIR` | `$(LIBDIR)/pkgconfig`         | `${PREFIX}/libdata/pkgconfig`      |
+| `MANDIR`       | `$(PREFIX)/share/man`         | `${PREFIX}/man`                    |
 | `INSTALL`      | `install`                     | `install`                          |
+
+Man pages ship in two flavours: `man/linux/` (`man(7)` macros, used by
+`GNUmakefile`) and `man/freebsd/` (`mdoc(7)` macros, used by
+`BSDmakefile`). Each makefile installs only its own flavour.
 
 Examples:
 
@@ -66,6 +74,39 @@ gmake install DESTDIR=/tmp/stage PREFIX=/usr   # staged
 
 The pkg-config file declares `Requires: libblake3`, so consumers pick up
 BLAKE3 through their own system package.
+
+---
+
+## Command-line tool
+
+`dirhash` mirrors the `md5sum(1)` / `md5(1)` UX:
+
+```
+dirhash [-r] [-t] [-e] path...
+
+  -r    print hashes for every node, not just the roots
+  -t    BSD-style tagged output: BLAKE3 (path) = <hex>
+  -e    print per-file I/O errors to stderr
+  -h    show this help
+```
+
+Each argument may be a regular file or a directory. Directories get a
+trailing `/` in the output so they're distinguishable from files.
+
+```sh
+$ dirhash /backup/2024-01
+164ca99b569c541e95e3ddba0d73769a917d61afaa61694493639d09337df671  /backup/2024-01/
+
+$ dirhash -t /backup/2024-01
+BLAKE3 (/backup/2024-01/) = 164ca99b569c541e95e3ddba0d73769a917d61afaa61694493639d09337df671
+
+$ dirhash -r /backup/2024-01 | head -3
+53ee0df2...  /backup/2024-01/foo/c.txt
+924f020f...  /backup/2024-01/foo/
+8e4c7c1b...  /backup/2024-01/a.txt
+```
+
+Exit status is non-zero if any argument could not be hashed.
 
 ---
 
@@ -205,6 +246,9 @@ incrementally.
 
 ```
 include/dir_hash.hpp           Public header (header-only).
+tools/dirhash.cpp              Command-line frontend.
+man/linux/                     Man pages, man(7) macros (GNUmakefile).
+man/freebsd/                   Man pages, mdoc(7) macros (BSDmakefile).
 third_party/blake3/            Vendored BLAKE3 reference implementation.
 tests/                         Self-contained test binaries.
 GNUmakefile / BSDmakefile      Per-platform build.

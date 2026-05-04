@@ -1,0 +1,98 @@
+.\" Manpage for dirhash.
+.TH DIRHASH 1 "May 2026" "dir-hash 0.1.0" "User Commands"
+.SH NAME
+dirhash \- content-based directory tree hash
+.SH SYNOPSIS
+.B dirhash
+.RB [ \-r ]
+.RB [ \-t ]
+.RB [ \-e ]
+.IR path \ ...
+.SH DESCRIPTION
+.B dirhash
+computes a BLAKE3 content fingerprint for each
+.I path
+argument. A path may be a regular file or a directory.
+.PP
+For a directory,
+.B dirhash
+walks the tree, hashes every regular file with BLAKE3, and folds the
+sorted multiset of child hashes into a Merkle-style hash for each
+subdirectory \(em bottom up. The result is name-agnostic: two
+directory trees with identical content under different filenames hash
+to the same value. Symlinks and other non-regular entries are excluded.
+.PP
+By default,
+.B dirhash
+prints one line per
+.I path
+argument in
+.BR md5sum (1)-compatible
+form, with directories distinguished by a trailing slash:
+.PP
+.RS 4
+.nf
+<hex>  <path>
+<hex>  <path>/
+.fi
+.RE
+.SH OPTIONS
+.TP
+.B \-r
+Recursive: print a hash line for every node visited (post-order \(em
+children before their parent), not just the
+.I path
+roots.
+.TP
+.B \-t
+Tagged output, in BSD
+.BR md5 (1)
+style:
+.RS
+.PP
+.B "BLAKE3 (path) = <hex>"
+.RE
+.TP
+.B \-e
+Print per-file I/O errors to standard error. Without this flag,
+unreadable files are silently skipped.
+.TP
+.B \-h
+Show usage and exit.
+.SH "I/O BEHAVIOUR"
+Every file is opened with
+.B POSIX_FADV_SEQUENTIAL
+and closed with
+.BR POSIX_FADV_DONTNEED ,
+which avoids polluting the page cache. Files are read in 4 MiB chunks.
+.SH "EXIT STATUS"
+.B dirhash
+exits 0 on success and non-zero if at least one
+.I path
+argument could not be hashed.
+.SH EXAMPLES
+Hash a single backup snapshot:
+.PP
+.RS 4
+.nf
+$ dirhash /backup/2024-01
+164ca99b...  /backup/2024-01/
+.fi
+.RE
+.PP
+Compare two snapshots node-by-node:
+.PP
+.RS 4
+.nf
+$ dirhash -r /backup/2024-01 | sort > a.list
+$ dirhash -r /backup/2024-02 | sort > b.list
+$ diff a.list b.list
+.fi
+.RE
+.SH "SEE ALSO"
+.BR dir_hash (3),
+.BR md5sum (1),
+.BR fts (3),
+.BR posix_fadvise (2)
+.SH AUTHORS
+Keith Williams.

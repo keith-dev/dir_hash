@@ -1,0 +1,128 @@
+.\" Manpage for the dir_hash C++ library.
+.TH DIR_HASH 3 "May 2026" "dir-hash 0.1.0" "C++ Library Functions"
+.SH NAME
+dir_hash::hash_directory \- content-based directory tree hash with BLAKE3
+.SH SYNOPSIS
+.nf
+.B #include "dir_hash.hpp"
+.PP
+.B namespace dir_hash {
+.B inline namespace v1 {
+.PP
+.BI "template <typename " Fn ", typename " ErrFn " = detail::NoopError>"
+.BI "std::array<uint8_t, 32> hash_directory("
+.BI "    std::string_view " path ,
+.BI "    " Fn "&& " callback ,
+.BI "    " ErrFn "&& " on_error " = {},"
+.BI "    std::pmr::memory_resource* " mem
+.BI "        = std::pmr::get_default_resource());"
+.PP
+.B }}
+.fi
+.PP
+Header-only. Link against
+.B \-lblake3 .
+.SH DESCRIPTION
+.BR hash_directory ()
+walks the tree rooted at
+.I path
+with
+.BR fts (3),
+hashes every regular file with BLAKE3, and computes a Merkle-style hash
+for every directory by feeding the lexicographically-sorted multiset of
+child hashes into BLAKE3. The directory hash is name-agnostic: two
+directories whose files have identical content \(em regardless of
+filenames or arrangement \(em hash to the same value. Symlinks and
+other non-regular entries are excluded. An empty directory hashes to
+BLAKE3 of an empty input.
+.PP
+.I callback
+is invoked once per node as its hash is finalised, with signature:
+.PP
+.RS 4
+.nf
+void(std::string_view path,
+     const std::array<uint8_t, 32>& hash,
+     bool is_dir);
+.fi
+.RE
+.PP
+The
+.I path
+passed to the callback is valid only for the duration of the call;
+copy it if it must outlive the callback.
+.PP
+.I on_error
+is invoked for files or directories that cannot be read, with
+signature:
+.PP
+.RS 4
+.nf
+void(std::string_view path, std::error_code ec);
+.fi
+.RE
+.PP
+The offending node is skipped and does not contribute to its parent's
+hash. The default is a no-op.
+.PP
+.I mem
+governs all internal allocations \(em path buffer, child-hash
+accumulators, and the 4 MiB read buffer. It does not affect
+caller-side allocations.
+.SH "I/O BEHAVIOUR"
+Every file is opened with
+.B POSIX_FADV_SEQUENTIAL
+and closed with
+.BR POSIX_FADV_DONTNEED ,
+which avoids polluting the page cache. Files are read in 4 MiB chunks
+and fed to the BLAKE3 hasher incrementally.
+.SH "RETURN VALUE"
+The 32-byte hash of the directory at
+.IR path .
+.SH ERRORS
+.BR hash_directory ()
+throws
+.B std::system_error
+if
+.I path
+cannot be opened or is not a directory. The contained
+.B std::error_code
+wraps the underlying
+.I errno
+under
+.BR std::system_category .
+.PP
+Per-file errors during traversal are reported via
+.IR on_error ;
+the traversal continues.
+.SH EXAMPLES
+Root hash only:
+.PP
+.RS 4
+.nf
+auto root = dir_hash::hash_directory(
+    "/backup/2024-01",
+    [](std::string_view, const std::array<uint8_t, 32>&, bool) {});
+.fi
+.RE
+.PP
+With a monotonic arena:
+.PP
+.RS 4
+.nf
+std::pmr::monotonic_buffer_resource arena(64 * 1024);
+auto root = dir_hash::hash_directory(
+    "/backup/2024-01",
+    [](std::string_view, const std::array<uint8_t, 32>&, bool) {},
+    {},
+    &arena);
+.fi
+.RE
+.SH "SEE ALSO"
+.BR dirhash (1),
+.BR fts (3),
+.BR posix_fadvise (2)
+.SH STANDARDS
+The library targets C++17.
+.SH AUTHORS
+Keith Williams.

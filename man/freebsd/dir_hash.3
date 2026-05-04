@@ -1,0 +1,124 @@
+.Dd May 4, 2026
+.Dt DIR_HASH 3
+.Os
+.Sh NAME
+.Nm dir_hash::hash_directory
+.Nd content-based directory tree hash with BLAKE3
+.Sh LIBRARY
+.Lb libdir_hash
+(header-only; requires
+.Lb libblake3
+at link time)
+.Sh SYNOPSIS
+.In dir_hash.hpp
+.Bd -literal
+namespace dir_hash {
+inline namespace v1 {
+
+template <typename Fn, typename ErrFn = detail::NoopError>
+std::array<uint8_t, 32> hash_directory(
+    std::string_view           path,
+    Fn&&                       callback,
+    ErrFn&&                    on_error = {},
+    std::pmr::memory_resource* mem      =
+        std::pmr::get_default_resource());
+
+}}
+.Ed
+.Sh DESCRIPTION
+.Fn hash_directory
+walks the tree rooted at
+.Fa path
+with
+.Xr fts 3 ,
+hashes every regular file with BLAKE3, and computes a Merkle-style hash
+for every directory by feeding the lexicographically-sorted multiset of
+child hashes into BLAKE3.
+The directory hash is name-agnostic: two directories whose files have
+identical content \(em regardless of filenames or arrangement \(em hash
+to the same value.
+Symlinks and other non-regular entries are excluded.
+An empty directory hashes to BLAKE3 of an empty input.
+.Pp
+.Fa callback
+is invoked once per node as its hash is finalised, with signature
+.Bd -literal -offset indent
+void(std::string_view path,
+     const std::array<uint8_t, 32>& hash,
+     bool is_dir);
+.Ed
+.Pp
+The
+.Fa path
+passed to the callback is valid only for the duration of the call;
+copy it if it must outlive the callback.
+.Pp
+.Fa on_error
+is invoked for files or directories that cannot be read, with signature
+.Bd -literal -offset indent
+void(std::string_view path, std::error_code ec);
+.Ed
+.Pp
+The offending node is skipped and does not contribute to its parent's
+hash.
+The default is a no-op.
+.Pp
+.Fa mem
+governs all internal allocations \(em path buffer, child-hash
+accumulators, and the 4 MiB read buffer.
+It does not affect caller-side allocations.
+.Sh I/O BEHAVIOUR
+Every file is opened with
+.Dv POSIX_FADV_SEQUENTIAL
+and closed with
+.Dv POSIX_FADV_DONTNEED ,
+which protects the ZFS ARC working set on
+.Fx
+and avoids polluting the page cache on Linux.
+Files are read in 4 MiB chunks and fed to the BLAKE3 hasher
+incrementally.
+.Sh RETURN VALUES
+The 32-byte hash of the directory at
+.Fa path .
+.Sh ERRORS
+.Fn hash_directory
+throws
+.Vt std::system_error
+if
+.Fa path
+cannot be opened or is not a directory.
+The contained
+.Vt std::error_code
+wraps the underlying
+.Va errno
+under
+.Vt std::system_category .
+.Pp
+Per-file errors during traversal are reported via
+.Fa on_error ;
+the traversal continues.
+.Sh EXAMPLES
+Root hash only:
+.Bd -literal -offset indent
+auto root = dir_hash::hash_directory(
+    "/backup/2024-01",
+    [](std::string_view, const std::array<uint8_t, 32>&, bool) {});
+.Ed
+.Pp
+With a monotonic arena:
+.Bd -literal -offset indent
+std::pmr::monotonic_buffer_resource arena(64 * 1024);
+auto root = dir_hash::hash_directory(
+    "/backup/2024-01",
+    [](std::string_view, const std::array<uint8_t, 32>&, bool) {},
+    {},
+    &arena);
+.Ed
+.Sh SEE ALSO
+.Xr dirhash 1 ,
+.Xr fts 3 ,
+.Xr posix_fadvise 2
+.Sh STANDARDS
+The library targets C++17.
+.Sh AUTHORS
+.An Keith Williams .

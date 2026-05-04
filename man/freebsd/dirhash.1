@@ -1,0 +1,94 @@
+.Dd May 4, 2026
+.Dt DIRHASH 1
+.Os
+.Sh NAME
+.Nm dirhash
+.Nd content-based directory tree hash
+.Sh SYNOPSIS
+.Nm
+.Op Fl rte
+.Ar path ...
+.Sh DESCRIPTION
+The
+.Nm
+utility computes a BLAKE3 content fingerprint for each
+.Ar path
+argument.
+A path may be a regular file or a directory.
+.Pp
+For a directory,
+.Nm
+walks the tree, hashes every regular file with BLAKE3, and folds the
+sorted multiset of child hashes into a Merkle-style hash for each
+subdirectory \(em bottom up.
+The result is name-agnostic: two directory trees with identical content
+under different filenames hash to the same value.
+Symlinks and other non-regular entries are excluded.
+.Pp
+By default,
+.Nm
+prints one line per
+.Ar path
+argument in
+.Xr md5 1 Ns -compatible
+form, with directories distinguished by a trailing slash:
+.Bd -literal -offset indent
+<hex>  <path>
+<hex>  <path>/
+.Ed
+.Pp
+The options are as follows:
+.Bl -tag -width Fl
+.It Fl r
+Recursive: print a hash line for every node visited (post-order \(em
+children before their parent), not just the
+.Ar path
+roots.
+.It Fl t
+Tagged output, in the BSD
+.Xr md5 1
+style:
+.Dl BLAKE3 (path) = <hex>
+.It Fl e
+Print per-file I/O errors to standard error.
+Without this flag, unreadable files are silently skipped.
+.It Fl h
+Show usage and exit.
+.El
+.Sh I/O BEHAVIOUR
+Every file is opened with
+.Dv POSIX_FADV_SEQUENTIAL
+and closed with
+.Dv POSIX_FADV_DONTNEED ,
+which protects the ZFS ARC working set on
+.Fx
+and avoids polluting the page cache on Linux.
+Files are read in 4 MiB chunks.
+.Sh EXIT STATUS
+.Ex -std
+Non-zero status indicates that at least one
+.Ar path
+argument could not be hashed.
+.Sh EXAMPLES
+Hash a single backup snapshot:
+.Bd -literal -offset indent
+$ dirhash /backup/2024-01
+164ca99b...  /backup/2024-01/
+.Ed
+.Pp
+Compare two snapshots node-by-node:
+.Bd -literal -offset indent
+$ dirhash -r /backup/2024-01 | sort > a.list
+$ dirhash -r /backup/2024-02 | sort > b.list
+$ diff a.list b.list
+.Ed
+.Sh SEE ALSO
+.Xr dir_hash 3 ,
+.Xr md5 1 ,
+.Xr fts 3 ,
+.Xr posix_fadvise 2
+.Sh AUTHORS
+The
+.Nm
+utility and library were authored by
+.An Keith Williams .

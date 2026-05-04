@@ -10,10 +10,13 @@ CFLAGS   ?= -O2 -g -Wall -Wextra
 
 PREFIX       ?= /usr/local
 DESTDIR      ?=
+BINDIR       ?= ${PREFIX}/bin
 INCLUDEDIR   ?= ${PREFIX}/include
 LIBDIR       ?= ${PREFIX}/lib
 PKGCONFIGDIR ?= ${PREFIX}/libdata/pkgconfig
+MANDIR       ?= ${PREFIX}/man
 INSTALL      ?= install
+MANSRC        = man/freebsd
 
 VERSION = 0.1.0
 
@@ -31,9 +34,11 @@ BLAKE3_OBJS = ${BUILD}/blake3/blake3.o \
 TESTS = test_basic test_empty test_errors test_allocator
 TEST_BINS = ${TESTS:S,^,${BUILD}/,}
 
+DIRHASH = ${BUILD}/dirhash
+
 .PHONY: all test clean install uninstall
 
-all: ${TEST_BINS}
+all: ${TEST_BINS} ${DIRHASH}
 
 test: ${TEST_BINS}
 .for t in ${TEST_BINS}
@@ -58,12 +63,21 @@ ${BUILD}/${t}: tests/${t}.cpp ${BLAKE3_OBJS} include/dir_hash.hpp tests/test_hel
 	${CXX} ${CXXSTD} ${CXXFLAGS} ${INCLUDES} -o ${.TARGET} tests/${t}.cpp ${BLAKE3_OBJS}
 .endfor
 
+${DIRHASH}: tools/dirhash.cpp ${BLAKE3_OBJS} include/dir_hash.hpp
+	@mkdir -p ${BUILD}
+	${CXX} ${CXXSTD} ${CXXFLAGS} ${INCLUDES} -o ${.TARGET} tools/dirhash.cpp ${BLAKE3_OBJS}
+
 clean:
 	rm -rf ${BUILD}
 
-install:
+install: ${DIRHASH}
+	${INSTALL} -d ${DESTDIR}${BINDIR}
+	${INSTALL} -m 755 ${DIRHASH} ${DESTDIR}${BINDIR}/dirhash
 	${INSTALL} -d ${DESTDIR}${INCLUDEDIR}
 	${INSTALL} -m 644 include/dir_hash.hpp ${DESTDIR}${INCLUDEDIR}/dir_hash.hpp
+	${INSTALL} -d ${DESTDIR}${MANDIR}/man1 ${DESTDIR}${MANDIR}/man3
+	${INSTALL} -m 644 ${MANSRC}/dirhash.1 ${DESTDIR}${MANDIR}/man1/dirhash.1
+	${INSTALL} -m 644 ${MANSRC}/dir_hash.3 ${DESTDIR}${MANDIR}/man3/dir_hash.3
 	${INSTALL} -d ${DESTDIR}${PKGCONFIGDIR}
 	@printf '%s\n' \
 	    'prefix=${PREFIX}' \
@@ -78,5 +92,8 @@ install:
 	    > ${DESTDIR}${PKGCONFIGDIR}/dir_hash.pc
 
 uninstall:
+	rm -f ${DESTDIR}${BINDIR}/dirhash
 	rm -f ${DESTDIR}${INCLUDEDIR}/dir_hash.hpp
+	rm -f ${DESTDIR}${MANDIR}/man1/dirhash.1
+	rm -f ${DESTDIR}${MANDIR}/man3/dir_hash.3
 	rm -f ${DESTDIR}${PKGCONFIGDIR}/dir_hash.pc

@@ -10,10 +10,13 @@ CFLAGS   ?= -O2 -g -Wall -Wextra
 
 PREFIX       ?= /usr/local
 DESTDIR      ?=
+BINDIR       ?= $(PREFIX)/bin
 INCLUDEDIR   ?= $(PREFIX)/include
 LIBDIR       ?= $(PREFIX)/lib
 PKGCONFIGDIR ?= $(LIBDIR)/pkgconfig
+MANDIR       ?= $(PREFIX)/share/man
 INSTALL      ?= install
+MANSRC        = man/linux
 
 VERSION = 0.1.0
 
@@ -33,8 +36,10 @@ BLAKE3_OBJS = $(patsubst third_party/blake3/%.c,$(BUILD)/blake3/%.o,$(BLAKE3_SRC
 TESTS = test_basic test_empty test_errors test_allocator
 TEST_BINS = $(addprefix $(BUILD)/,$(TESTS))
 
+DIRHASH = $(BUILD)/dirhash
+
 .PHONY: all test clean install uninstall
-all: $(TEST_BINS)
+all: $(TEST_BINS) $(DIRHASH)
 
 test: $(TEST_BINS)
 	@set -e; for t in $(TEST_BINS); do echo "==> $$t"; $$t; done
@@ -45,15 +50,23 @@ $(BUILD)/blake3/%.o: third_party/blake3/%.c | $(BUILD)/blake3
 $(BUILD)/%: tests/%.cpp $(BLAKE3_OBJS) include/dir_hash.hpp tests/test_helpers.hpp | $(BUILD)
 	$(CXX) $(CXXSTD) $(CXXFLAGS) $(INCLUDES) -o $@ $< $(BLAKE3_OBJS)
 
+$(DIRHASH): tools/dirhash.cpp $(BLAKE3_OBJS) include/dir_hash.hpp | $(BUILD)
+	$(CXX) $(CXXSTD) $(CXXFLAGS) $(INCLUDES) -o $@ $< $(BLAKE3_OBJS)
+
 $(BUILD) $(BUILD)/blake3:
 	@mkdir -p $@
 
 clean:
 	rm -rf $(BUILD)
 
-install:
+install: $(DIRHASH)
+	$(INSTALL) -d $(DESTDIR)$(BINDIR)
+	$(INSTALL) -m 755 $(DIRHASH) $(DESTDIR)$(BINDIR)/dirhash
 	$(INSTALL) -d $(DESTDIR)$(INCLUDEDIR)
 	$(INSTALL) -m 644 include/dir_hash.hpp $(DESTDIR)$(INCLUDEDIR)/dir_hash.hpp
+	$(INSTALL) -d $(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man3
+	$(INSTALL) -m 644 $(MANSRC)/dirhash.1 $(DESTDIR)$(MANDIR)/man1/dirhash.1
+	$(INSTALL) -m 644 $(MANSRC)/dir_hash.3 $(DESTDIR)$(MANDIR)/man3/dir_hash.3
 	$(INSTALL) -d $(DESTDIR)$(PKGCONFIGDIR)
 	@printf '%s\n' \
 	    'prefix=$(PREFIX)' \
@@ -68,5 +81,8 @@ install:
 	    > $(DESTDIR)$(PKGCONFIGDIR)/dir_hash.pc
 
 uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/dirhash
 	rm -f $(DESTDIR)$(INCLUDEDIR)/dir_hash.hpp
+	rm -f $(DESTDIR)$(MANDIR)/man1/dirhash.1
+	rm -f $(DESTDIR)$(MANDIR)/man3/dir_hash.3
 	rm -f $(DESTDIR)$(PKGCONFIGDIR)/dir_hash.pc
