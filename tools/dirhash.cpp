@@ -26,10 +26,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-extern "C" {
-#include "blake3.h"
-}
-
 namespace {
 
 using Hash = std::array<std::uint8_t, 32>;
@@ -69,44 +65,7 @@ void print_line(const Hash& h, std::string_view path, bool is_dir) {
     }
 }
 
-bool hash_single_file(const char* path, Hash& out) {
-    int fd = ::open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return false;
-    }
-    ::posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 
-    static constexpr std::size_t kBufSize = 4 * 1024 * 1024;
-    static std::vector<std::uint8_t> buf(kBufSize);
-
-    blake3_hasher h;
-    blake3_hasher_init(&h);
-
-    bool ok = true;
-    for (;;) {
-        ssize_t n = ::read(fd, buf.data(), buf.size());
-        if (n > 0) {
-            blake3_hasher_update(&h, buf.data(), static_cast<std::size_t>(n));
-            continue;
-        }
-        if (n == 0) {
-            break;
-        }
-        if (errno == EINTR) {
-            continue;
-        }
-        ok = false;
-        break;
-    }
-
-    ::posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-    ::close(fd);
-
-    if (ok) {
-        blake3_hasher_finalize(&h, out.data(), out.size());
-    }
-    return ok;
-}
 
 void usage(std::FILE* f) {
     std::fprintf(f,
@@ -157,7 +116,7 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        if (S_ISDIR(st.st_mode)) {
+        if (S_ISDIR(st.st_mode) || S_ISREG(st.st_mode)) {
             try {
                 Hash root = dir_hash::hash_directory(
                     path,
@@ -167,6 +126,7 @@ int main(int argc, char** argv) {
                         }
                     },
                     [&](std::string_view p, std::error_code ec) {
+                        exit_code = 1;
                         if (report_errors) {
                             std::fprintf(stderr, "dirhash: %.*s: %s\n",
                                          static_cast<int>(p.size()),
@@ -174,21 +134,12 @@ int main(int argc, char** argv) {
                                          ec.message().c_str());
                         }
                     });
-                if (!recursive) {
-                    print_line(root, path, true);
+                if (!recursive || S_ISREG(st.st_mode)) {
+                    print_line(root, path, S_ISDIR(st.st_mode));
                 }
             } catch (const std::system_error& e) {
                 std::fprintf(stderr, "dirhash: %s: %s\n",
                              path, e.code().message().c_str());
-                exit_code = 1;
-            }
-        } else if (S_ISREG(st.st_mode)) {
-            Hash h;
-            if (hash_single_file(path, h)) {
-                print_line(h, path, false);
-            } else {
-                std::fprintf(stderr, "dirhash: %s: %s\n",
-                             path, std::strerror(errno));
                 exit_code = 1;
             }
         } else {

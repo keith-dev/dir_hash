@@ -93,6 +93,22 @@ inline Hash combine_directory(std::pmr::vector<Hash>& children) {
 
 } // namespace detail
 
+// Hash a single regular file. Returns false and calls on_error if the file
+// cannot be opened or read. Uses the supplied buffer for I/O; if buf/buf_size
+// are omitted a temporary 4 MiB heap buffer is used.
+template <typename ErrFn = detail::NoopError>
+inline bool hash_file(
+    std::string_view           path,
+    detail::Hash&              out,
+    ErrFn&&                    on_error  = {},
+    std::pmr::memory_resource* mem       = std::pmr::get_default_resource())
+{
+    constexpr std::size_t kBufSize = 4 * 1024 * 1024;
+    std::pmr::vector<std::uint8_t> buf(kBufSize, mem);
+    return detail::hash_file(std::string(path).c_str(), path, out,
+                             on_error, buf.data(), buf.size());
+}
+
 template <typename Fn, typename ErrFn = detail::NoopError>
 std::array<std::uint8_t, 32> hash_directory(
     std::string_view           path,
@@ -155,6 +171,10 @@ std::array<std::uint8_t, 32> hash_directory(
                 callback(ent_path, fh, false);
                 if (!stack.empty()) {
                     stack.back().push_back(fh);
+                } else {
+                    // Plain file passed as the root path.
+                    root_hash = fh;
+                    got_root  = true;
                 }
             }
             break;
@@ -195,9 +215,9 @@ std::array<std::uint8_t, 32> hash_directory(
             throw std::system_error(detail::make_ec(read_errno),
                                     "dir_hash::hash_directory: fts_read");
         }
-        // Path was a non-directory (e.g. regular file or symlink to one).
+        // Path was an unsupported type (symlink, device, etc.).
         throw std::system_error(detail::make_ec(ENOTDIR),
-                                "dir_hash::hash_directory: not a directory");
+                                "dir_hash::hash_directory: not a file or directory");
     }
 
     return root_hash;

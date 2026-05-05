@@ -22,14 +22,16 @@ VERSION = 0.1.0
 
 CXXSTD   = -std=c++17
 INCLUDES = -Iinclude -Ithird_party/blake3
-BLAKE3_DEFS = -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 \
-              -DBLAKE3_NO_AVX2 -DBLAKE3_NO_AVX512
+BLAKE3_DEFS = -DBLAKE3_NO_AVX512
 
 BUILD = build
 
 BLAKE3_SRCS = third_party/blake3/blake3.c \
               third_party/blake3/blake3_dispatch.c \
-              third_party/blake3/blake3_portable.c
+              third_party/blake3/blake3_portable.c \
+              third_party/blake3/blake3_sse2.c \
+              third_party/blake3/blake3_sse41.c \
+              third_party/blake3/blake3_avx2.c
 
 BLAKE3_OBJS = $(patsubst third_party/blake3/%.c,$(BUILD)/blake3/%.o,$(BLAKE3_SRCS))
 
@@ -43,6 +45,15 @@ all: $(TEST_BINS) $(DIRHASH)
 
 test: $(TEST_BINS)
 	@set -e; for t in $(TEST_BINS); do echo "==> $$t"; $$t; done
+
+$(BUILD)/blake3/blake3_sse2.o: third_party/blake3/blake3_sse2.c | $(BUILD)/blake3
+	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -msse2 -Ithird_party/blake3 -c -o $@ $<
+
+$(BUILD)/blake3/blake3_sse41.o: third_party/blake3/blake3_sse41.c | $(BUILD)/blake3
+	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -msse4.1 -Ithird_party/blake3 -c -o $@ $<
+
+$(BUILD)/blake3/blake3_avx2.o: third_party/blake3/blake3_avx2.c | $(BUILD)/blake3
+	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -mavx2 -Ithird_party/blake3 -c -o $@ $<
 
 $(BUILD)/blake3/%.o: third_party/blake3/%.c | $(BUILD)/blake3
 	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -Ithird_party/blake3 -c -o $@ $<
