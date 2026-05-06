@@ -45,13 +45,17 @@ inline std::array<std::uint8_t, 32> blake3_of(const std::string& s) {
 }
 
 inline std::string make_tmpdir() {
-    char tmpl[] = "/tmp/dirhash-test-XXXXXX";
-    char* p = ::mkdtemp(tmpl);
+    const char* base = std::getenv("TMPDIR");
+    if (!base || base[0] == '\0') {
+        base = "/tmp";
+    }
+    std::string tmpl = std::string(base) + "/dirhash-test-XXXXXX";
+    char* p = ::mkdtemp(tmpl.data());
     if (!p) {
         std::perror("mkdtemp");
         std::exit(1);
     }
-    return std::string(p);
+    return tmpl;
 }
 
 inline void write_file(const std::string& path, const std::string& contents) {

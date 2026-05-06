@@ -15,7 +15,9 @@ static Hash combine(std::vector<Hash> children) {
     std::sort(children.begin(), children.end());
     blake3_hasher h;
     blake3_hasher_init(&h);
-    for (auto& c : children) blake3_hasher_update(&h, c.data(), c.size());
+    for (auto& c : children) {
+        blake3_hasher_update(&h, c.data(), c.size());
+    }
     Hash out;
     blake3_hasher_finalize(&h, out.data(), out.size());
     return out;
