@@ -18,7 +18,7 @@ MANDIR       ?= ${PREFIX}/man
 INSTALL      ?= install
 MANSRC        = man/freebsd
 
-VERSION = 1.1.0
+VERSION = 1.2.0
 
 CXXSTD    = -std=c++17
 INCLUDES  = -Iinclude -Ithird_party/blake3
