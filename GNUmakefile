@@ -26,12 +26,24 @@ BLAKE3_DEFS = -DBLAKE3_NO_AVX512
 
 BUILD = build
 
-BLAKE3_SRCS = third_party/blake3/blake3.c \
-              third_party/blake3/blake3_dispatch.c \
-              third_party/blake3/blake3_portable.c \
-              third_party/blake3/blake3_sse2.c \
-              third_party/blake3/blake3_sse41.c \
-              third_party/blake3/blake3_avx2.c
+BLAKE3_PORTABLE_SRCS = third_party/blake3/blake3.c \
+                       third_party/blake3/blake3_dispatch.c \
+                       third_party/blake3/blake3_portable.c
+
+# Detect Android: either running natively on Termux or cross-compiling with an
+# android toolchain (e.g. aarch64-linux-android-clang).  In both cases we have
+# no NEON or x86 SIMD sources, so fall back to the portable implementation.
+_UNAME_O := $(shell uname -o 2>/dev/null)
+_CC_TARGET := $(shell $(CC) -dumpmachine 2>/dev/null)
+ifneq ($(filter Android,$(_UNAME_O))$(findstring android,$(_CC_TARGET)),)
+BLAKE3_SRCS  = $(BLAKE3_PORTABLE_SRCS)
+BLAKE3_DEFS += -DBLAKE3_USE_NEON=0 -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2
+else
+BLAKE3_SRCS  = $(BLAKE3_PORTABLE_SRCS) \
+               third_party/blake3/blake3_sse2.c \
+               third_party/blake3/blake3_sse41.c \
+               third_party/blake3/blake3_avx2.c
+endif
 
 BLAKE3_OBJS = $(patsubst third_party/blake3/%.c,$(BUILD)/blake3/%.o,$(BLAKE3_SRCS))
 
@@ -46,6 +58,7 @@ all: $(TEST_BINS) $(DIRHASH)
 test: $(TEST_BINS)
 	@set -e; for t in $(TEST_BINS); do echo "==> $$t"; $$t; done
 
+ifeq ($(filter Android,$(_UNAME_O))$(findstring android,$(_CC_TARGET)),)
 $(BUILD)/blake3/blake3_sse2.o: third_party/blake3/blake3_sse2.c | $(BUILD)/blake3
 	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -msse2 -Ithird_party/blake3 -c -o $@ $<
 
@@ -54,6 +67,7 @@ $(BUILD)/blake3/blake3_sse41.o: third_party/blake3/blake3_sse41.c | $(BUILD)/bla
 
 $(BUILD)/blake3/blake3_avx2.o: third_party/blake3/blake3_avx2.c | $(BUILD)/blake3
 	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -mavx2 -Ithird_party/blake3 -c -o $@ $<
+endif
 
 $(BUILD)/blake3/%.o: third_party/blake3/%.c | $(BUILD)/blake3
 	$(CC) $(CFLAGS) $(BLAKE3_DEFS) -Ithird_party/blake3 -c -o $@ $<

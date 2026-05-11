@@ -26,12 +26,20 @@ BLAKE3_DEFS = -DBLAKE3_NO_AVX512
 
 BUILD = build
 
-BLAKE3_OBJS = ${BUILD}/blake3/blake3.o \
-              ${BUILD}/blake3/blake3_dispatch.o \
-              ${BUILD}/blake3/blake3_portable.o \
-              ${BUILD}/blake3/blake3_sse2.o \
-              ${BUILD}/blake3/blake3_sse41.o \
-              ${BUILD}/blake3/blake3_avx2.o
+BLAKE3_PORTABLE_OBJS = ${BUILD}/blake3/blake3.o \
+                       ${BUILD}/blake3/blake3_dispatch.o \
+                       ${BUILD}/blake3/blake3_portable.o
+
+UNAME_O != uname -o 2>/dev/null || true
+.if ${UNAME_O} == "Android"
+BLAKE3_OBJS  = ${BLAKE3_PORTABLE_OBJS}
+BLAKE3_DEFS += -DBLAKE3_NO_SSE2 -DBLAKE3_NO_SSE41 -DBLAKE3_NO_AVX2
+.else
+BLAKE3_OBJS  = ${BLAKE3_PORTABLE_OBJS} \
+               ${BUILD}/blake3/blake3_sse2.o \
+               ${BUILD}/blake3/blake3_sse41.o \
+               ${BUILD}/blake3/blake3_avx2.o
+.endif
 
 TESTS = test_basic test_empty test_errors test_allocator
 TEST_BINS = ${TESTS:S,^,${BUILD}/,}
@@ -59,6 +67,7 @@ ${BUILD}/blake3/blake3_portable.o: third_party/blake3/blake3_portable.c
 	@mkdir -p ${BUILD}/blake3
 	${CC} ${CFLAGS} ${BLAKE3_DEFS} -Ithird_party/blake3 -c -o ${.TARGET} ${.ALLSRC}
 
+.if ${UNAME_O} != "Android"
 ${BUILD}/blake3/blake3_sse2.o: third_party/blake3/blake3_sse2.c
 	@mkdir -p ${BUILD}/blake3
 	${CC} ${CFLAGS} ${BLAKE3_DEFS} -msse2 -Ithird_party/blake3 -c -o ${.TARGET} ${.ALLSRC}
@@ -70,6 +79,7 @@ ${BUILD}/blake3/blake3_sse41.o: third_party/blake3/blake3_sse41.c
 ${BUILD}/blake3/blake3_avx2.o: third_party/blake3/blake3_avx2.c
 	@mkdir -p ${BUILD}/blake3
 	${CC} ${CFLAGS} ${BLAKE3_DEFS} -mavx2 -Ithird_party/blake3 -c -o ${.TARGET} ${.ALLSRC}
+.endif
 
 .for t in ${TESTS}
 ${BUILD}/${t}: tests/${t}.cpp ${BLAKE3_OBJS} include/dir_hash.hpp tests/test_helpers.hpp
