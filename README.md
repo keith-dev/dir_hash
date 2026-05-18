@@ -1,5 +1,7 @@
 # dir-hash
 
+![human input: collaborated](https://raw.githubusercontent.com/keith-dev/badges-repo/master/badge-collaborated.svg)
+
 A header-only C++17 library that walks a directory tree, hashes every
 regular file with [BLAKE3](https://github.com/BLAKE3-team/BLAKE3), and
 produces a content-based Merkle-like fingerprint for every node — files
